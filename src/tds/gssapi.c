@@ -387,6 +387,73 @@ tds_gss_continue(TDSSOCKET * tds, struct tds_gss_auth *auth, gss_buffer_desc *to
 	return TDS_SUCCESS;
 }
 
+static void
+tds5_send_msg(TDSSOCKET *tds, uint16_t msg_type)
+{
+	tds_put_tinyint(tds, TDS_MSG_TOKEN);
+	tds_put_tinyint(tds, 3); /* length */
+	tds_put_tinyint(tds, 1); /* status, 1=has params */
+	tds_put_smallint(tds, msg_type);
+}
+
+TDSRET
+tds5_gss_send(TDSSOCKET *tds)
+{
+	if (!tds->conn->authentication)
+		return TDS_FAIL;
+
+	tds5_send_msg(tds, TDS5_MSG_SEC_OPAQUE);
+
+	tds_put_byte(tds, TDS5_PARAMFMT_TOKEN);
+	TDS_START_LEN_USMALLINT(tds) {
+		tds_put_smallint(tds, 5); /* # parameters */
+
+		tds_put_n(tds, NULL, 6); /* name len + output + usertype */
+		tds_put_tinyint(tds, SYBINTN);
+		tds_put_tinyint(tds, 4);
+		tds_put_tinyint(tds, 0); /* locale len */
+
+		tds_put_n(tds, NULL, 6); /* name len + output + usertype */
+		tds_put_tinyint(tds, SYBINTN);
+		tds_put_tinyint(tds, 4);
+		tds_put_tinyint(tds, 0); /* locale len */
+
+		tds_put_n(tds, NULL, 6); /* name len + output + usertype */
+		tds_put_tinyint(tds, SYBVARBINARY);
+		tds_put_tinyint(tds, 255);
+		tds_put_tinyint(tds, 0); /* locale len */
+
+		tds_put_n(tds, NULL, 6); /* name len + output + usertype */
+		tds_put_tinyint(tds, SYBLONGBINARY);
+		tds_put_int(tds, 0x7fffffff);
+		tds_put_tinyint(tds, 0); /* locale len */
+
+		tds_put_n(tds, NULL, 6); /* name len + output + usertype */
+		tds_put_tinyint(tds, SYBINTN);
+		tds_put_tinyint(tds, 4);
+		tds_put_tinyint(tds, 0); /* locale len */
+	} TDS_END_LEN
+
+	tds_put_byte(tds, TDS5_PARAMS_TOKEN);
+
+	tds_put_tinyint(tds, 4);
+	tds_put_int(tds, TDS5_SEC_VERSION);
+
+	tds_put_tinyint(tds, 4);
+	tds_put_int(tds, TDS5_SEC_SECSESS);
+
+	tds_put_tinyint(tds, 12);
+	tds_put_n(tds, "\x06\x0a\x2b\x06\x01\x04\x01\x87\x01\x04\x06\x06", 12); /* KRB5 Sybase OID */
+
+	tds_put_int(tds, tds->conn->authentication->packet_len);
+	tds_put_n(tds, tds->conn->authentication->packet, tds->conn->authentication->packet_len);
+
+	tds_put_tinyint(tds, 4);
+	tds_put_int(tds, 1); /* flags */
+
+	return TDS_SUCCESS;
+}
+
 /** @} */
 
 #endif
